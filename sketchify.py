@@ -49,6 +49,28 @@ def translate_to_discrete_greycolor(rgb_tuple, n=5):
     return new_grey, new_grey, new_grey
 
 
+def process_rgb_map_by_rgb_lambda(rgb_map, rgb_func):
+    w, h = len(rgb_map), len(rgb_map[0])
+    return [
+        [rgb_func(rgb_map[i][j]) for j in xrange(h)]
+        for i in xrange(w)
+    ]
+
+
+def get_grid(rgb_map, grid_size, x_pt, y_pt):
+    grid = []
+    for i in range(grid_size):
+        grid.append([rgb_map[i + x_pt][j + y_pt] for j in range(grid_size)])
+    return grid
+
+
+def set_grid(rgb_map, grid, x_pt, y_pt):
+    grid_size = len(grid)
+    for i in range(grid_size):
+        for j in range(grid_size):
+            rgb_map[i + x_pt][j + y_pt] = grid[i][j]
+
+
 def process_rgb_map_by_grid(rgb_map, grid_size, process_func):
     """
     Input:
