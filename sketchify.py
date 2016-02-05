@@ -34,6 +34,17 @@ def save_rgb_map_as_image(rgb_map, image_path):
     im.save(image_path)
 
 
+def get_color_grey_diff(one, two):
+    grey_one = sum(one) / 3
+    grey_two = sum(two) / 3
+    return grey_one - grey_two
+
+
+def get_darker_color(one, two):
+    grey_diff = get_color_grey_diff(one, two)
+    return one if grey_diff > 0 else two
+
+
 # Given a color value (b/w 0 to 255) will translate to the nearest discrete
 # color value
 def translate_to_discrete_color_value(color_value, n=5):
@@ -100,7 +111,7 @@ def process_rgb_map_by_grid(rgb_map, grid_size, process_func):
     return final_rgb_map
 
 
-# Experimental [IGNORE]
+# Experimental ----> IGNORE <----
 def process_rgb_map_by_vstrip(rgb_map, process_func):
     w, h = len(rgb_map), len(rgb_map[0])
     final_rgb_map = rgb_map_factory(w, h, (127, 127, 127))
@@ -110,7 +121,7 @@ def process_rgb_map_by_vstrip(rgb_map, process_func):
     return final_rgb_map
 
 
-# Experimental [IGNORE]
+# Experimental ----> IGNORE <----
 def mark_hot_points_on_discrete_array(arr, normalize_pixel):
     new_arr = arr[:]
     arr_len = len(arr)
@@ -159,9 +170,61 @@ def translate_tape_to_borders(arr):
         l + [t[0]]
     ]
 
+NEIGHBORHOOD_SIZE = 3
+
+def get_left_neighborhood_by_idx(tape, idx):
+    neighborhood = []
+    tape_len = len(tape)
+    for nth_neighbor in xrange(1, NEIGHBORHOOD_SIZE + 1):
+        cursor = ((tape_len - nth_neighbor) + idx) % tape_len
+        neighborhood.append(tape[cursor])
+    return neighborhood
+
+
+def get_right_neighborhood_by_id(tape, idx):
+    neighborhood = []
+    tape_len = len(tape)
+    for nth_neighbor in xrange(1, NEIGHBORHOOD_SIZE + 1):
+        cursor = ((tape_len + nth_neighbor) + idx) % tape_len
+        neighborhood.append(tape[cursor])
+    return neighborhood
+
+
+def get_color_for_neighborhood(neighborhood):
+    mean_red = sum([neighbor[0] for neighbor in neighborhood]) / NEIGHBORHOOD_SIZE
+    mean_green = sum([neighbor[1] for neighbor in neighborhood]) / NEIGHBORHOOD_SIZE
+    mean_blue = sum([neighbor[2] for neighbor in neighborhood]) / NEIGHBORHOOD_SIZE
+
+    return (mean_red, mean_green, mean_blue)
+
 
 def get_tape_with_hot_points(tape):
-    return tape
+    diff_list = []
+    for idx, pixel in enumerate(tape):
+        left_neighborhood = get_left_neighborhood_by_idx(tape, idx)
+        right_neighborhood = get_right_neighborhood_by_id(tape, idx)
+        left_color = get_color_for_neighborhood(left_neighborhood)
+        right_color = get_color_for_neighborhood(right_neighborhood)
+        color_grey_diff = get_color_grey_diff(left_color, right_color)
+        diff_list.append((idx, color_grey_diff, left_color, right_color))
+
+    sorted_diff_list = sorted(diff_list, lambda x: -x[1])
+
+    hp_one = sorted_diff_list[0]
+    hp_two = sorted_diff_list[1]
+    hp_one_idx = hp_one[0]
+    hp_two_idx = hp_two[0]
+
+    updated_tape = tape[:]
+    updated_tape = [(0, 0, 0) for _ in tape]
+
+    for idx, pixel in updated_tape:
+        if idx == hp_one_idx:
+            updated_tape[idx] = get_darker_color(hp_one[2], hp_one[3])
+        elif idx == hp_two_idx:
+            updated_tape[idx] = get_darker_color(hp_two[2], hp_two[3])
+
+    return updated_tape
 
 
 def get_grid_with_strokes_from_borders(borders):
