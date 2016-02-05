@@ -3,6 +3,11 @@ from copy import copy, deepcopy
 import random
 
 
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
+
 def rgb_map_factory(w, h, rgb_tuple):
     return [
         [rgb_tuple for j in xrange(h)]
@@ -95,6 +100,7 @@ def process_rgb_map_by_grid(rgb_map, grid_size, process_func):
     return final_rgb_map
 
 
+# Experimental [IGNORE]
 def process_rgb_map_by_vstrip(rgb_map, process_func):
     w, h = len(rgb_map), len(rgb_map[0])
     final_rgb_map = rgb_map_factory(w, h, (127, 127, 127))
@@ -103,7 +109,8 @@ def process_rgb_map_by_vstrip(rgb_map, process_func):
         final_rgb_map[idx] = processed_col
     return final_rgb_map
 
-# Experimental
+
+# Experimental [IGNORE]
 def mark_hot_points_on_discrete_array(arr, normalize_pixel):
     new_arr = arr[:]
     arr_len = len(arr)
@@ -119,13 +126,57 @@ def mark_hot_points_on_discrete_array(arr, normalize_pixel):
             new_arr[i+1] = arr[i+1]
     return new_arr
 
+
 def get_borders(grid):
     grid_size = len(grid)
     top = [grid[i][0] for i in range(grid_size)]
     right = grid[-1]
-    bottom = [grid[i][-1] for i in range(grid_size)]
-    left = grid[0]
+    bottom = [grid[i][-1] for i in range(grid_size)][::-1]
+    left = grid[0][::-1]
     return [top, right, bottom, left]
+
+
+def get_dummy_grid_for_borders(borders):
+    border_len = len(borders[0])
+    return rgb_map_factory(
+        w=border_len,
+        h=border_len,
+        rgb_tuple=(127,127,127)
+    )
+
+
+def translate_borders_to_tape(borders):
+    top, right, bottom, left = borders
+    return top[:-1] + right[:-1] + bottom[:-1] + left[:-1]
+
+
+def translate_tape_to_borders(arr):
+    t, r, b, l = list(chunks(arr, 4))
+    return [
+        t + [r[0]],
+        r + [b[0]],
+        b + [l[0]],
+        l + [t[0]]
+    ]
+
+
+def get_tape_with_hot_points(tape):
+    return tape
+
+
+def get_grid_with_strokes_from_borders(borders):
+    dummy_grid = get_dummy_grid_for_borders(borders)
+    return dummy_grid
+
+
+
+def grid_stroke_processor(grid):
+    borders = get_borders(grid)
+    tape = translate_borders_to_tape(borders)
+    tape_with_hot_points = get_tape_with_hot_points(tape)
+    borders_with_hot_points = translate_tape_to_borders(tape_with_hot_points)
+    return get_grid_with_strokes_from_borders(borders_with_hot_points)
+
 
 """
 Gridify
@@ -140,15 +191,9 @@ Gridify
 
 if __name__ == "__main__":
     rgb_map = get_rgb_map_for_image("data/sample.jpg")
-    # rgb_map_with_discrete_color = process_rgb_map_by_rgb_lambda(
-    #     rgb_map,
-    #     lambda p: translate_to_discrete_color(p, 5)
-    # )
-    # rgb_map_with_hotpoints_v = process_rgb_map_by_vstrip(
-    #     rgb_map,
-    #     lambda arr: mark_hot_points_on_discrete_array(
-    #         arr,
-    #         lambda p: translate_to_discrete_greycolor(p, 5)
-    #     )
-    # )
-    save_rgb_map_as_image(rgb_map_with_hotpoints_v, "output/grid.jpg")
+    rgb_map_with_strokes = process_rgb_map_by_grid(
+        rgb_map,
+        5,
+        grid_stroke_processor
+    )
+    save_rgb_map_as_image(rgb_map_with_strokes, "output/grid.jpg")
