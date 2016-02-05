@@ -37,9 +37,9 @@ def translate_to_discrete_color_value(color_value, n=5):
 
 def translate_to_discrete_color(rgb_tuple, n=5):
     r, g, b = rgb_tuple
-    new_r = translate_to_discrete_color_value(r)
-    new_g = translate_to_discrete_color_value(g)
-    new_b = translate_to_discrete_color_value(b)
+    new_r = translate_to_discrete_color_value(r, n)
+    new_g = translate_to_discrete_color_value(g, n)
+    new_b = translate_to_discrete_color_value(b, n)
     return new_r, new_g, new_b
 
 
@@ -94,6 +94,39 @@ def process_rgb_map_by_grid(rgb_map, grid_size, process_func):
             set_grid(final_rgb_map, processed_grid, x_pt, y_pt)
     return final_rgb_map
 
+
+def process_rgb_map_by_vstrip(rgb_map, process_func):
+    w, h = len(rgb_map), len(rgb_map[0])
+    final_rgb_map = rgb_map_factory(w, h, (127, 127, 127))
+    for idx, col in enumerate(rgb_map):
+        processed_col = process_func(col)
+        final_rgb_map[idx] = processed_col
+    return final_rgb_map
+
+# Experimental
+def mark_hot_points_on_discrete_array(arr, normalize_pixel):
+    new_arr = arr[:]
+    arr_len = len(arr)
+    for i in xrange(arr_len-1):
+        arr_i = normalize_pixel(arr[i])
+        arr_i_next = normalize_pixel(arr[i+1])
+
+        if arr_i == arr_i_next:
+            new_arr[i] = (255,255,255)
+        elif arr_i > arr_i_next:
+            new_arr[i] = arr[i]
+        else:
+            new_arr[i+1] = arr[i+1]
+    return new_arr
+
+def get_borders(grid):
+    grid_size = len(grid)
+    top = [grid[i][0] for i in range(grid_size)]
+    right = grid[-1]
+    bottom = [grid[i][-1] for i in range(grid_size)]
+    left = grid[0]
+    return [top, right, bottom, left]
+
 """
 Gridify
     Reduce border to single dimension.
@@ -103,3 +136,19 @@ Gridify
     Connect hot points
 """
 
+
+
+if __name__ == "__main__":
+    rgb_map = get_rgb_map_for_image("data/sample.jpg")
+    # rgb_map_with_discrete_color = process_rgb_map_by_rgb_lambda(
+    #     rgb_map,
+    #     lambda p: translate_to_discrete_color(p, 5)
+    # )
+    # rgb_map_with_hotpoints_v = process_rgb_map_by_vstrip(
+    #     rgb_map,
+    #     lambda arr: mark_hot_points_on_discrete_array(
+    #         arr,
+    #         lambda p: translate_to_discrete_greycolor(p, 5)
+    #     )
+    # )
+    save_rgb_map_as_image(rgb_map_with_hotpoints_v, "output/grid.jpg")
