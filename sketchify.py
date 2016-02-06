@@ -42,13 +42,23 @@ def get_color_grey_diff(one, two):
 
 def get_darker_color(one, two):
     grey_diff = get_color_grey_diff(one, two)
-    return one if grey_diff > 0 else two
+    return one if grey_diff < 0 else two
 
 
 # Given a color value (b/w 0 to 255) will translate to the nearest discrete
 # color value
 def translate_to_discrete_color_value(color_value, n=5):
     return int(round(color_value * (n - 1) / 255.)) * (255 / (n - 1))
+
+
+def contrast_grayscale(g_val, power):
+    # v = int((g_val ** 2 / 255) ** power)
+    # return v,v,v
+    l_powered = 0
+    u_powered = 255 ** power + 0.
+    g_val_powered = g_val ** power + 0.
+    v = int((g_val_powered / u_powered) * 255)
+    return (v, v, v)
 
 
 def translate_to_discrete_color(rgb_tuple, n=5):
@@ -61,9 +71,12 @@ def translate_to_discrete_color(rgb_tuple, n=5):
 
 def translate_to_discrete_greycolor(rgb_tuple, n=5):
     grey_value = sum(rgb_tuple) / 3
-    new_grey = translate_to_discrete_color_value(grey_value)
+    new_grey = translate_to_discrete_color_value(grey_value, n)
     return new_grey, new_grey, new_grey
 
+def translate_to_black_n_white(rgb_tuple):
+    v = sum(rgb_tuple) / 3
+    return v, v, v
 
 def process_rgb_map_by_rgb_lambda(rgb_map, rgb_func):
     w, h = len(rgb_map), len(rgb_map[0])
@@ -102,7 +115,7 @@ def process_rgb_map_by_grid(rgb_map, grid_size, process_func):
     new_w, new_h = [(d / grid_size) * grid_size for d in (w,h)]
     x_pts = [i * grid_size for i in xrange(new_w / grid_size)]
     y_pts = [i * grid_size for i in xrange(new_h / grid_size)]
-    final_rgb_map = rgb_map_factory(new_w, new_h, (127, 127, 127))
+    final_rgb_map = rgb_map_factory(new_w, new_h, (255, 255, 255))
     for x_pt in x_pts:
         for y_pt in y_pts:
             grid = get_grid(rgb_map, grid_size, x_pt, y_pt)
@@ -111,17 +124,35 @@ def process_rgb_map_by_grid(rgb_map, grid_size, process_func):
     return final_rgb_map
 
 
-# Experimental ----> IGNORE <----
 def process_rgb_map_by_vstrip(rgb_map, process_func):
     w, h = len(rgb_map), len(rgb_map[0])
-    final_rgb_map = rgb_map_factory(w, h, (127, 127, 127))
+    final_rgb_map = rgb_map_factory(w, h, (255, 255, 255))
     for idx, col in enumerate(rgb_map):
         processed_col = process_func(col)
         final_rgb_map[idx] = processed_col
     return final_rgb_map
 
 
-# Experimental ----> IGNORE <----
+def process_rgb_map_by_hstrip(rgb_map, process_func):
+    w, h = len(rgb_map), len(rgb_map[0])
+    final_rgb_map = rgb_map_factory(w, h, (255, 255, 255))
+    for idx in xrange(h):
+        row = [col[idx] for col in rgb_map]
+        processed_row = process_func(row)
+        for col_idx, col in enumerate(final_rgb_map):
+            col[idx] = processed_row[col_idx]
+    return final_rgb_map
+
+
+def union_rgb_maps(one, two):
+    w, h = len(rgb_map), len(rgb_map[0])
+    final_rgb_map = rgb_map_factory(w, h, (255, 255, 255))
+    for i in xrange(w):
+        for j in xrange(h):
+            final_rgb_map[i][j] = get_darker_color(one[i][j], two[i][j])
+    return final_rgb_map
+
+
 def mark_hot_points_on_discrete_array(arr, normalize_pixel):
     new_arr = arr[:]
     arr_len = len(arr)
@@ -129,116 +160,19 @@ def mark_hot_points_on_discrete_array(arr, normalize_pixel):
         arr_i = normalize_pixel(arr[i])
         arr_i_next = normalize_pixel(arr[i+1])
 
-        if arr_i == arr_i_next:
+        g_diff = get_color_grey_diff(arr_i, arr_i_next)
+        if abs(g_diff) < 5:
             new_arr[i] = (255,255,255)
         elif arr_i > arr_i_next:
-            new_arr[i] = arr[i]
+            new_arr[i] = translate_to_discrete_greycolor(arr_i, 2)
         else:
-            new_arr[i+1] = arr[i+1]
+            new_arr[i+1] = translate_to_discrete_greycolor(arr_i_next, 2)
     return new_arr
 
-
-def get_borders(grid):
-    grid_size = len(grid)
-    top = [grid[i][0] for i in range(grid_size)]
-    right = grid[-1]
-    bottom = [grid[i][-1] for i in range(grid_size)][::-1]
-    left = grid[0][::-1]
-    return [top, right, bottom, left]
-
-
-def get_dummy_grid_for_borders(borders):
-    border_len = len(borders[0])
-    return rgb_map_factory(
-        w=border_len,
-        h=border_len,
-        rgb_tuple=(127,127,127)
-    )
-
-
-def translate_borders_to_tape(borders):
-    top, right, bottom, left = borders
-    return top[:-1] + right[:-1] + bottom[:-1] + left[:-1]
-
-
-def translate_tape_to_borders(arr):
-    t, r, b, l = list(chunks(arr, 4))
-    return [
-        t + [r[0]],
-        r + [b[0]],
-        b + [l[0]],
-        l + [t[0]]
-    ]
-
-NEIGHBORHOOD_SIZE = 3
-
-def get_left_neighborhood_by_idx(tape, idx):
-    neighborhood = []
-    tape_len = len(tape)
-    for nth_neighbor in xrange(1, NEIGHBORHOOD_SIZE + 1):
-        cursor = ((tape_len - nth_neighbor) + idx) % tape_len
-        neighborhood.append(tape[cursor])
-    return neighborhood
-
-
-def get_right_neighborhood_by_id(tape, idx):
-    neighborhood = []
-    tape_len = len(tape)
-    for nth_neighbor in xrange(1, NEIGHBORHOOD_SIZE + 1):
-        cursor = ((tape_len + nth_neighbor) + idx) % tape_len
-        neighborhood.append(tape[cursor])
-    return neighborhood
-
-
-def get_color_for_neighborhood(neighborhood):
-    mean_red = sum([neighbor[0] for neighbor in neighborhood]) / NEIGHBORHOOD_SIZE
-    mean_green = sum([neighbor[1] for neighbor in neighborhood]) / NEIGHBORHOOD_SIZE
-    mean_blue = sum([neighbor[2] for neighbor in neighborhood]) / NEIGHBORHOOD_SIZE
-
-    return (mean_red, mean_green, mean_blue)
-
-
-def get_tape_with_hot_points(tape):
-    diff_list = []
-    for idx, pixel in enumerate(tape):
-        left_neighborhood = get_left_neighborhood_by_idx(tape, idx)
-        right_neighborhood = get_right_neighborhood_by_id(tape, idx)
-        left_color = get_color_for_neighborhood(left_neighborhood)
-        right_color = get_color_for_neighborhood(right_neighborhood)
-        color_grey_diff = get_color_grey_diff(left_color, right_color)
-        diff_list.append((idx, color_grey_diff, left_color, right_color))
-
-    sorted_diff_list = sorted(diff_list, lambda x: -x[1])
-
-    hp_one = sorted_diff_list[0]
-    hp_two = sorted_diff_list[1]
-    hp_one_idx = hp_one[0]
-    hp_two_idx = hp_two[0]
-
-    updated_tape = tape[:]
-    updated_tape = [(0, 0, 0) for _ in tape]
-
-    for idx, pixel in updated_tape:
-        if idx == hp_one_idx:
-            updated_tape[idx] = get_darker_color(hp_one[2], hp_one[3])
-        elif idx == hp_two_idx:
-            updated_tape[idx] = get_darker_color(hp_two[2], hp_two[3])
-
-    return updated_tape
-
-
-def get_grid_with_strokes_from_borders(borders):
-    dummy_grid = get_dummy_grid_for_borders(borders)
-    return dummy_grid
-
-
-
-def grid_stroke_processor(grid):
-    borders = get_borders(grid)
-    tape = translate_borders_to_tape(borders)
-    tape_with_hot_points = get_tape_with_hot_points(tape)
-    borders_with_hot_points = translate_tape_to_borders(tape_with_hot_points)
-    return get_grid_with_strokes_from_borders(borders_with_hot_points)
+# def mark_hot_points_on_discrete_array(arr, normalize_pixel):
+#     new_arr = arr[:]
+    
+#     return new_arr
 
 
 """
@@ -251,12 +185,56 @@ Gridify
 """
 
 
+def smooth_3_by_3(grid):
+    mid_pt = grid[1][1]
+    grid_len = len(grid)
+    for i in xrange(grid_len):
+        for j in xrange(grid_len):
+            if i!=1 and j!=1:
+                if grid[i][j] < mid_pt:
+                    return grid
+    grid[1][1] = (255,255,255)
+    return grid
 
 if __name__ == "__main__":
     rgb_map = get_rgb_map_for_image("data/sample.jpg")
-    rgb_map_with_strokes = process_rgb_map_by_grid(
+    rgb_map_with_black_n_white = process_rgb_map_by_rgb_lambda(
         rgb_map,
-        5,
-        grid_stroke_processor
+        translate_to_black_n_white
     )
-    save_rgb_map_as_image(rgb_map_with_strokes, "output/grid.jpg")
+    rgb_map_with_contrast = process_rgb_map_by_rgb_lambda(
+        rgb_map_with_black_n_white,
+        lambda p: contrast_grayscale(p[0], 1.2)
+    )
+    rgb_map_with_vstrips = process_rgb_map_by_vstrip(
+        rgb_map_with_contrast,
+        lambda arr: mark_hot_points_on_discrete_array(
+            arr,
+            lambda p: p
+        )
+    )
+    rgb_map_with_hstrips = process_rgb_map_by_hstrip(
+        rgb_map_with_contrast,
+        lambda arr: mark_hot_points_on_discrete_array(
+            arr,
+            lambda p: p
+        )
+    )
+    rgb_map_of_union = union_rgb_maps(
+        rgb_map_with_vstrips,
+        rgb_map_with_hstrips
+    )
+    rgb_map_with_smoothing = process_rgb_map_by_grid(
+        rgb_map_of_union,
+        3,
+        smooth_3_by_3
+    )
+    save_rgb_map_as_image(
+        #rgb_map_with_contrast,
+        rgb_map_with_smoothing,
+        # union_rgb_maps(
+        #     rgb_map_with_vstrips,
+        #     rgb_map_with_hstrips
+        # ),
+        "output/grid.jpg"
+    )
